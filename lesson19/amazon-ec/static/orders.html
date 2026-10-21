@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注文履歴 - 最小ECサイト</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <p><a href="index.html">← 商品一覧に戻る</a> | <a href="cart.html">カートを見る</a></p>
+    <h1>注文履歴</h1>
+    <p id="orders-message">注文履歴を読み込んでいます...</p>
+    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 800px;">
+        <thead><tr><th>注文日時</th><th>商品名</th><th>価格</th><th>数量</th><th>小計</th></tr></thead>
+        <tbody id="orders-items"></tbody>
+    </table>
+    <script src="orders.js"></script>
+</body>
+</html>
