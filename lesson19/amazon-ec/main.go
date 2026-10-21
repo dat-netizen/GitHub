@@ -22,6 +22,13 @@ type OrderRequest struct {
 	Quantity  int `json:"quantity"`
 }
 
+// 注文履歴表示用のデータ
+type OrderHistoryItem struct {
+	ProductName string `json:"product_name"`
+	Price       int    `json:"price"`
+	Quantity    int    `json:"quantity"`
+}
+
 var db *sql.DB
 
 func main() {
@@ -37,6 +44,8 @@ func main() {
 	// APIルーティング
 	http.HandleFunc("/api/products", getProductsHandler)
 	http.HandleFunc("/api/product", getProductDetailHandler)
+
+	// GETは注文履歴、POSTは既存の注文登録
 	http.HandleFunc("/api/orders", ordersHandler)
 
 	// 静的ファイルサーバー
@@ -57,6 +66,7 @@ func initDB() {
 		name TEXT NOT NULL,
 		price INTEGER NOT NULL
 	);`
+
 	_, err := db.Exec(createProductsTable)
 	if err != nil {
 		log.Fatal("Failed to create products table:", err)
@@ -69,6 +79,7 @@ func initDB() {
 		quantity INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
+
 	_, err = db.Exec(createOrdersTable)
 	if err != nil {
 		log.Fatal("Failed to create orders table:", err)
@@ -77,10 +88,11 @@ func initDB() {
 	var count int
 	err = db.QueryRow("SELECT COUNT(*) FROM products").Scan(&count)
 	if err == nil && count == 0 {
-		insertQuery := `INSERT INTO products (name, price) VALUES 
+		insertQuery := `INSERT INTO products (name, price) VALUES
 			('ノートパソコン', 120000),
 			('ワイヤレスマウス', 3500),
 			('USBメモリ 64GB', 1200);`
+
 		_, err = db.Exec(insertQuery)
 		if err != nil {
 			log.Println("Failed to insert initial products:", err)
@@ -105,6 +117,7 @@ func getProductsHandler(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	products := []Product{}
+
 	for rows.Next() {
 		var p Product
 		if err := rows.Scan(&p.ID, &p.Name, &p.Price); err != nil {
@@ -114,7 +127,12 @@ func getProductsHandler(w http.ResponseWriter, r *http.Request) {
 		products = append(products, p)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(products)
 }
 
@@ -138,7 +156,11 @@ func getProductDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var p Product
-	err = db.QueryRow("SELECT id, name, price FROM products WHERE id = ?", id).Scan(&p.ID, &p.Name, &p.Price)
+	err = db.QueryRow(
+		"SELECT id, name, price FROM products WHERE id = ?",
+		id,
+	).Scan(&p.ID, &p.Name, &p.Price)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Product not found", http.StatusNotFound)
@@ -148,11 +170,13 @@ func getProductDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(p)
 }
 
-// 注文API：GETは注文履歴、POSTは注文作成
+// 注文APIの振り分け
+// GET: 注文履歴の取得
+// POST: 既存の注文登録
 func ordersHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -165,11 +189,12 @@ func ordersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// 注文履歴を取得するハンドラー
 func getOrdersHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
-		SELECT products.name, products.price, orders.quantity, orders.created_at
+		SELECT products.name, products.price, orders.quantity
 		FROM orders
-		JOIN products ON products.id = orders.product_id
+		INNER JOIN products ON products.id = orders.product_id
 		ORDER BY orders.id DESC
 	`)
 	if err != nil {
@@ -178,55 +203,69 @@ func getOrdersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type OrderHistory struct {
-		ProductName string
-		Price       int
-		Quantity    int
-		CreatedAt   string
-	}
-	orders := []OrderHistory{}
+	history := []OrderHistoryItem{}
+
 	for rows.Next() {
-		var order OrderHistory
-		if err := rows.Scan(&order.ProductName, &order.Price, &order.Quantity, &order.CreatedAt); err != nil {
+		var item OrderHistoryItem
+
+		if err := rows.Scan(
+			&item.ProductName,
+			&item.Price,
+			&item.Quantity,
+		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		orders = append(orders, order)
+
+		history = append(history, item)
 	}
+
 	if err := rows.Err(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(orders)
+	json.NewEncoder(w).Encode(history)
 }
 
-// 既存の注文作成API（POST）を維持する
+// 注文を作成するハンドラー
+// 既存のPOST /api/ordersの処理を維持
 func createOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req OrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
+
 	if req.ProductID <= 0 || req.Quantity <= 0 {
 		http.Error(w, "Invalid product_id or quantity", http.StatusBadRequest)
 		return
 	}
-	var productID int
-	if err := db.QueryRow("SELECT id FROM products WHERE id = ?", req.ProductID).Scan(&productID); err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Product not found", http.StatusBadRequest)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-	_, err := db.Exec("INSERT INTO orders (product_id, quantity) VALUES (?, ?)", req.ProductID, req.Quantity)
+
+	stmt, err := db.Prepare(
+		"INSERT INTO orders (product_id, quantity) VALUES (?, ?)",
+	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(req.ProductID, req.Quantity)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "注文しました"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "注文しました",
+	})
 }

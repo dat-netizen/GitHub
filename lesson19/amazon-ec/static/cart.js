@@ -1,72 +1,134 @@
 document.addEventListener("DOMContentLoaded", () => {
     displayCart();
-    document.getElementById("order-btn").addEventListener("click", submitOrder);
+
+    const orderButton = document.getElementById("order-btn");
+    orderButton.addEventListener("click", submitOrder);
 });
 
 function getCart() {
-    try { return JSON.parse(localStorage.getItem("cart")) || []; }
-    catch { return []; }
+    try {
+        const cart = JSON.parse(localStorage.getItem("cart")) || [];
+        return Array.isArray(cart) ? cart : [];
+    } catch (error) {
+        return [];
+    }
 }
 
 function displayCart() {
     const cart = getCart();
-    const tbody = document.getElementById("cart-items");
-    const totalHeader = document.getElementById("cart-total");
-    tbody.innerHTML = "";
+    const cartItemsTbody = document.getElementById("cart-items");
+    const cartTotalHeader = document.getElementById("cart-total");
+
+    cartItemsTbody.innerHTML = "";
+
     if (cart.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">カートに商品が入っていません。</td></tr>';
-        totalHeader.innerText = "合計: ¥0";
-        document.getElementById("order-btn").disabled = true;
+        cartItemsTbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center;">
+                    カートに商品が入っていません。
+                </td>
+            </tr>
+        `;
+        cartTotalHeader.innerText = "合計: ¥0";
         return;
     }
-    document.getElementById("order-btn").disabled = false;
+
     let total = 0;
+
     cart.forEach(item => {
-        const subtotal = Number(item.price) * Number(item.quantity);
+        const price = Number(item.price) || 0;
+        const quantity = Number(item.quantity) || 0;
+        const subtotal = price * quantity;
         total += subtotal;
+
         const row = document.createElement("tr");
-        row.innerHTML = `<td>${escapeHtml(item.name)}</td>
-            <td style="text-align:right;">¥${Number(item.price).toLocaleString()}</td>
-            <td style="text-align:center;">${Number(item.quantity)}</td>
-            <td style="text-align:right;">¥${subtotal.toLocaleString()}</td>`;
-        tbody.appendChild(row);
+        row.innerHTML = `
+            <td>${escapeHtml(item.name)}</td>
+            <td style="text-align: right;">¥${price.toLocaleString()}</td>
+            <td style="text-align: center;">${quantity}</td>
+            <td style="text-align: right;">¥${subtotal.toLocaleString()}</td>
+        `;
+
+        cartItemsTbody.appendChild(row);
     });
-    totalHeader.innerText = `合計: ¥${total.toLocaleString()}`;
+
+    cartTotalHeader.innerText = `合計: ¥${total.toLocaleString()}`;
 }
 
+// カート内の全商品を注文する
 async function submitOrder() {
+    const orderButton = document.getElementById("order-btn");
+    const orderMessage = document.getElementById("order-message");
     const cart = getCart();
+
+    orderMessage.textContent = "";
+
     if (cart.length === 0) {
-        alert("カートに商品が入っていません。");
+        orderMessage.textContent = "カートに商品が入っていません。";
         return;
     }
-    const button = document.getElementById("order-btn");
-    const message = document.getElementById("order-message");
-    button.disabled = true;
-    message.innerText = "注文を処理しています...";
+
+    orderButton.disabled = true;
+
     try {
+        // すべての商品を既存の注文APIへ順番に送信する
         for (const item of cart) {
+            const productId = Number(item.id);
+            const quantity = Number(item.quantity);
+
+            if (
+                !Number.isInteger(productId) ||
+                productId <= 0 ||
+                !Number.isInteger(quantity) ||
+                quantity <= 0
+            ) {
+                throw new Error("商品IDまたは数量が正しくありません。");
+            }
+
             const response = await fetch("/api/orders", {
                 method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({product_id: Number(item.id), quantity: Number(item.quantity)})
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    product_id: productId,
+                    quantity: quantity
+                })
             });
-            if (!response.ok) throw new Error("注文処理に失敗しました。");
-            await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    `注文の保存に失敗しました（HTTP ${response.status}）。`
+                );
+            }
         }
-        localStorage.removeItem("cart");
-        message.innerText = "注文しました";
+
+        // すべての注文APIが成功した場合だけカートを空にする
+        localStorage.setItem("cart", "[]");
+
         displayCart();
+        orderMessage.textContent = "注文しました";
     } catch (error) {
-        console.error(error);
-        message.innerText = "注文に失敗しました。カートの商品は残っています。もう一度お試しください。";
-        button.disabled = false;
+        // 失敗時はカートを空にしない
+        orderMessage.textContent =
+            error.message || "注文に失敗しました。もう一度お試しください。";
+    } finally {
+        orderButton.disabled = false;
     }
 }
 
 function escapeHtml(str) {
-    if (!str) return "";
-    return String(str).replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
+    if (str === null || str === undefined) {
+        return "";
+    }
+
+    return String(str).replace(/[&<>"']/g, function (m) {
+        return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        }[m];
+    });
 }

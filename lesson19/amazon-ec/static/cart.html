@@ -7,11 +7,13 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <p><a href="index.html">← 商品一覧に戻る</a> | <a href="orders.html">注文履歴を見る</a></p>
+    <p><a href="index.html">← 商品一覧に戻る</a></p>
+
     <h1>ショッピングカート</h1>
 
     <div id="cart-container">
-        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
+        <table border="1" cellpadding="8" cellspacing="0"
+            style="border-collapse: collapse; width: 100%; max-width: 600px;">
             <thead>
                 <tr>
                     <th>商品名</th>
@@ -25,10 +27,17 @@
         </table>
 
         <h2 id="cart-total" style="margin-top: 20px;">合計: ¥0</h2>
-    </div>
 
-    <p><button id="order-btn">注文を確定する</button></p>
-    <p id="order-message" role="status"></p>
+        <p>
+            <button type="button" id="order-btn">注文を確定する</button>
+        </p>
+
+        <p id="order-message" role="status" aria-live="polite"></p>
+
+        <p>
+            <a href="orders.html">注文履歴を見る</a>
+        </p>
+    </div>
 
     <script src="cart.js"></script>
 </body>

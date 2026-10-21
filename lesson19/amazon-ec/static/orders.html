@@ -7,13 +7,34 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <p><a href="index.html">← 商品一覧に戻る</a> | <a href="cart.html">カートを見る</a></p>
+    <p><a href="index.html">← 商品一覧に戻る</a></p>
+    <p><a href="cart.html">← カートに戻る</a></p>
+
     <h1>注文履歴</h1>
-    <p id="orders-message">注文履歴を読み込んでいます...</p>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 800px;">
-        <thead><tr><th>注文日時</th><th>商品名</th><th>価格</th><th>数量</th><th>小計</th></tr></thead>
-        <tbody id="orders-items"></tbody>
+
+    <table border="1" cellpadding="8" cellspacing="0"
+        style="border-collapse: collapse; width: 100%; max-width: 700px;">
+        <thead>
+            <tr>
+                <th>商品名</th>
+                <th>価格</th>
+                <th>数量</th>
+                <th>小計</th>
+            </tr>
+        </thead>
+        <tbody id="orders-items">
+            <tr>
+                <td colspan="4" style="text-align: center;">
+                    注文履歴を読み込んでいます...
+                </td>
+            </tr>
+        </tbody>
     </table>
+
+    <h2 id="orders-total" style="margin-top: 20px;">合計: ¥0</h2>
+
+    <p id="orders-message" role="status" aria-live="polite"></p>
+
     <script src="orders.js"></script>
 </body>
 </html>
